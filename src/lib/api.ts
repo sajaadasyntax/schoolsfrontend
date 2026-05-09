@@ -1,6 +1,17 @@
 import Cookies from "js-cookie";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+/** Host-only values (e.g. api.example.com) are treated as paths on the current origin; always use an absolute URL. */
+function resolveApiBaseUrl(raw: string | undefined): string {
+  const fallback = "http://localhost:5000";
+  if (!raw?.trim()) return fallback;
+  let base = raw.trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(base)) {
+    base = `https://${base.replace(/^\/+/, "")}`;
+  }
+  return base;
+}
+
+export const apiBaseUrl = resolveApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -27,7 +38,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
     headers,
     credentials: "include",

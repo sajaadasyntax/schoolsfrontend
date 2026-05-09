@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { api, Payment } from "@/lib/api";
+import { api, apiBaseUrl, Payment } from "@/lib/api";
 import { formatCurrency, formatDate, getPaymentMethodLabel } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Search, RefreshCw, ExternalLink, ImageIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function ReceiptsPage() {
   const { toast } = useToast();
@@ -141,7 +139,7 @@ export default function ReceiptsPage() {
                   </TableRow>
                 ) : (
                   displayList.map((p) => {
-                    const imgSrc = p.receipt ? `${API_URL}${p.receipt.imagePath}` : null;
+                    const imgSrc = p.receipt ? `${apiBaseUrl}${p.receipt.imagePath}` : null;
                     return (
                       <TableRow key={p.id}>
                         <TableCell>

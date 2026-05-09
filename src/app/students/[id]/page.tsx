@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { api, StudentDetail, FinancialSummary } from "@/lib/api";
+import { api, apiBaseUrl, StudentDetail, FinancialSummary } from "@/lib/api";
 import { formatCurrency, formatDate, getFeeTypeLabel, getPaymentMethodLabel, getInstallmentStatusLabel, getInventoryCategoryTypeLabel } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,8 +17,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash2, Upload, Bus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ARABIC_MONTHS } from "@/lib/utils";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function StudentProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -244,7 +242,7 @@ export default function StudentProfilePage() {
                         <TableCell>{getPaymentMethodLabel(p.method)}</TableCell>
                         <TableCell>{p.receiptNumber || "-"}</TableCell>
                         <TableCell>
-                          {p.receipt && <a href={`${API_URL}${p.receipt.imagePath}`} target="_blank" className="text-blue-600 underline text-sm">عرض</a>}
+                          {p.receipt && <a href={`${apiBaseUrl}${p.receipt.imagePath}`} target="_blank" className="text-blue-600 underline text-sm">عرض</a>}
                         </TableCell>
                       </TableRow>
                     ))}

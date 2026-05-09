@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { api, Expense, Branch } from "@/lib/api";
+import { api, apiBaseUrl, Expense, Branch } from "@/lib/api";
 import { formatCurrency, formatDate, EXPENSE_CATEGORIES } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 export default function ExpensesPage() {
   const { toast } = useToast();
@@ -115,7 +113,7 @@ export default function ExpensesPage() {
                     <TableCell>
                       {e.invoicePath ? (
                         <a
-                          href={`${API_BASE}${e.invoicePath}`}
+                          href={`${apiBaseUrl}${e.invoicePath}`}
                           target="_blank"
                           rel="noreferrer"
                           className="flex items-center gap-1 text-blue-600 hover:underline text-sm"
