@@ -1,14 +1,19 @@
 import Cookies from "js-cookie";
 
-/** Host-only values (e.g. api.example.com) are treated as paths on the current origin; always use an absolute URL. */
+/**
+ * Host-only values (e.g. api.example.com) are treated as relative paths on the current origin (e.g. Vercel),
+ * producing URLs like https://your-app.vercel.app/api.example.com/api/... — always normalize to an absolute URL.
+ */
 function resolveApiBaseUrl(raw: string | undefined): string {
   const fallback = "http://localhost:5000";
   if (!raw?.trim()) return fallback;
   let base = raw.trim().replace(/\/+$/, "");
-  if (!/^https?:\/\//i.test(base)) {
-    base = `https://${base.replace(/^\/+/, "")}`;
+  if (/^https?:\/\//i.test(base)) return base;
+  const host = base.replace(/^\/+/, "");
+  if (/^(localhost|127\.0\.0\.1)(:|\/|$)/i.test(host)) {
+    return `http://${host}`;
   }
-  return base;
+  return `https://${host}`;
 }
 
 export const apiBaseUrl = resolveApiBaseUrl(process.env.NEXT_PUBLIC_API_URL);
