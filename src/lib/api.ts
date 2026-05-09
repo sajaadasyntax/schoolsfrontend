@@ -7,7 +7,7 @@ import Cookies from "js-cookie";
 function resolveApiBaseUrl(raw: string | undefined): string {
   const fallback = "http://localhost:5000";
   if (!raw?.trim()) return fallback;
-  let base = raw.trim().replace(/\/+$/, "");
+  const base = raw.trim().replace(/\/+$/, "");
   if (/^https?:\/\//i.test(base)) return base;
   const host = base.replace(/^\/+/, "");
   if (/^(localhost|127\.0\.0\.1)(:|\/|$)/i.test(host)) {
