@@ -67,7 +67,7 @@ export default function InstallmentsPage() {
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">الأقساط ({installments.length})</h1>
 
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[["PENDING", "معلق", "bg-yellow-50 text-yellow-700"], ["PARTIAL", "جزئي", "bg-blue-50 text-blue-700"], ["OVERDUE", "متأخر", "bg-red-50 text-red-700"], ["PAID", "مدفوع", "bg-green-50 text-green-700"]].map(([key, label, colors]) => (
             <div key={key} className={`rounded-lg p-3 text-center ${colors}`}>
               <div className="text-xl font-bold">{counts[key as keyof typeof counts]}</div>

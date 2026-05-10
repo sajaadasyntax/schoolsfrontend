@@ -17,6 +17,7 @@ import {
   BarChart3,
   Settings,
   ClipboardList,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -38,7 +39,12 @@ const allMenuItems = [
   { href: "/settings", label: "الإعدادات", icon: Settings, roles: ["SUPER_ADMIN", "BRANCH_ADMIN"] },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+export default function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
   const role = user?.role || "";
@@ -46,12 +52,33 @@ export default function Sidebar() {
   const menuItems = allMenuItems.filter((item) => item.roles.includes(role));
 
   return (
-    <aside className="w-64 min-h-screen bg-gray-900 text-white flex flex-col">
-      <div className="p-6 border-b border-gray-700">
-        <h1 className="text-lg font-bold text-white leading-tight">
-          نظام الإدارة المالية
-        </h1>
-        <p className="text-xs text-gray-400 mt-1">للمؤسسات التعليمية</p>
+    <aside
+      className={cn(
+        "fixed top-0 right-0 z-40 w-64 h-screen bg-gray-900 text-white flex flex-col",
+        "transform transition-transform duration-300",
+        "md:static md:translate-x-0 md:z-auto md:h-auto md:min-h-screen",
+        open ? "translate-x-0" : "translate-x-full"
+      )}
+    >
+      {/* Logo + title */}
+      <div className="p-4 border-b border-gray-700 flex items-center gap-3">
+        <img
+          src="/logo.png"
+          alt="شعار المؤسسة"
+          className="w-10 h-10 rounded-full bg-white object-contain p-0.5 flex-shrink-0"
+        />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-sm font-bold leading-tight truncate">نظام الإدارة المالية</h1>
+          <p className="text-xs text-gray-400 mt-0.5 truncate">للمؤسسات التعليمية</p>
+        </div>
+        {/* Close button — visible on mobile only */}
+        <button
+          onClick={onClose}
+          className="md:hidden p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700"
+          aria-label="إغلاق القائمة"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
       <nav className="flex-1 p-4 overflow-y-auto">
@@ -66,6 +93,7 @@ export default function Sidebar() {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  onClick={onClose}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors",
                     isActive

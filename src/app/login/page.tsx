@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { GraduationCap } from "lucide-react";
-
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -38,9 +36,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center space-y-3">
           <div className="flex justify-center">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center">
-              <GraduationCap className="w-8 h-8 text-white" />
-            </div>
+            <img src="/logo.png" alt="شعار المؤسسة" className="w-24 h-24 rounded-full object-contain bg-white p-1 shadow-md" />
           </div>
           <CardTitle className="text-2xl font-bold text-gray-800">
             نظام الإدارة المالية

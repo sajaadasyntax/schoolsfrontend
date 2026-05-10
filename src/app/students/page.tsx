@@ -82,7 +82,7 @@ export default function StudentsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold">الطلاب ({students.length})</h1>
           <Button onClick={() => { setForm({ fullName: "", parentName: "", parentPhone: "", gender: "MALE", classId: "", branchId: "", status: "ACTIVE", notes: "" }); setDialogOpen(true); }}>
             <Plus className="w-4 h-4 ml-1" /> إضافة طالب

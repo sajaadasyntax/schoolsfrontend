@@ -150,7 +150,7 @@ export default function PaymentsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold">المدفوعات ({payments.length})</h1>
           <div className="flex items-center gap-3">
             <div className="text-lg font-bold text-green-600">{formatCurrency(total)}</div>

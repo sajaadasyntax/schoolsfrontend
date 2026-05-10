@@ -63,7 +63,7 @@ export default function ReceiptsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold">الإيصالات</h1>
           <Button variant="outline" size="sm" onClick={loadRecent} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ml-1 ${loading ? "animate-spin" : ""}`} />
@@ -191,10 +191,10 @@ export default function ReceiptsPage() {
 
       {/* Lightbox */}
       <Dialog open={!!lightboxSrc} onOpenChange={() => setLightboxSrc(null)}>
-        <DialogContent className="max-w-3xl p-2">
+        <DialogContent className="max-w-3xl w-[95vw] p-2">
           {lightboxSrc && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={lightboxSrc} alt="إيصال" className="w-full h-auto rounded" />
+            <img src={lightboxSrc} alt="إيصال" className="max-w-full max-h-[85vh] object-contain rounded mx-auto block" />
           )}
         </DialogContent>
       </Dialog>

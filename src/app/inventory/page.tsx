@@ -107,7 +107,7 @@ export default function InventoryPage() {
   return (
     <DashboardLayout>
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold">إدارة المستودع</h1>
           {lowStock.length > 0 && (
             <div className="flex items-center gap-2 bg-yellow-50 text-yellow-700 px-3 py-2 rounded-lg text-sm">
