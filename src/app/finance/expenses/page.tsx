@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export default function ExpensesPage() {
   const { toast } = useToast();
@@ -21,6 +22,8 @@ export default function ExpensesPage() {
   const [loading, setLoading] = useState(true);
   const [filterCategory, setFilterCategory] = useState("ALL");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ branchId: "", category: "", description: "", amount: "", date: "", notes: "" });
 
   async function load() {
@@ -39,7 +42,16 @@ export default function ExpensesPage() {
 
   useEffect(() => { load(); }, [filterCategory]);
 
+  function requestCreate() {
+    if (!form.category || !form.amount) {
+      toast({ title: "خطأ", description: "الفئة والمبلغ مطلوبان", variant: "destructive" });
+      return;
+    }
+    setConfirmOpen(true);
+  }
+
   async function handleCreate() {
+    setSubmitting(true);
     try {
       await api.createExpense(form);
       toast({ title: "تم إضافة المصروف" });
@@ -47,6 +59,8 @@ export default function ExpensesPage() {
       load();
     } catch (err: unknown) {
       toast({ title: "خطأ", description: err instanceof Error ? err.message : "حدث خطأ", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -154,10 +168,26 @@ export default function ExpensesPage() {
             <div><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
             <div><Label>المبلغ *</Label><Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
             <div><Label>التاريخ</Label><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
-            <div className="flex gap-2 justify-end"><Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button><Button onClick={handleCreate}>إضافة</Button></div>
+            <div className="flex gap-2 justify-end"><Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button><Button onClick={requestCreate} disabled={submitting}>إضافة</Button></div>
           </div>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد إضافة المصروف</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل تريد إضافة مصروف بقيمة {form.amount} — {form.category}؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCreate} disabled={submitting}>
+              {submitting ? "جارٍ..." : "تأكيد"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

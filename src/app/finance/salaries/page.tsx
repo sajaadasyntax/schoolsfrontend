@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 type SalaryFormData = {
   employeeId: string;
@@ -77,6 +78,8 @@ export default function SalariesPage() {
   const [salaryDialog, setSalaryDialog] = useState(false);
   const [empForm, setEmpForm] = useState<{ branchId: string; fullName: string; jobTitle: string; phone: string; email: string; baseSalary: string; category: "TEACHING" | "ADMINISTRATIVE" | "SUPPORT" }>({ branchId: "", fullName: "", jobTitle: "", phone: "", email: "", baseSalary: "", category: "TEACHING" });
   const [salaryForm, setSalaryForm] = useState<SalaryFormData>(emptySalaryForm());
+  const [submittingSalary, setSubmittingSalary] = useState(false);
+  const [salaryConfirmOpen, setSalaryConfirmOpen] = useState(false);
 
   async function load() {
     try {
@@ -112,6 +115,11 @@ export default function SalariesPage() {
   }
 
   async function handleCreateSalaryPayment() {
+    if (!salaryForm.employeeId || !salaryForm.baseSalary || !salaryForm.month) {
+      toast({ title: "خطأ", description: "الموظف والراتب الأساسي والشهر مطلوبة", variant: "destructive" });
+      return;
+    }
+    setSubmittingSalary(true);
     try {
       const { earnings, deductions, net } = calcNet(salaryForm);
       await api.createSalaryPayment({
@@ -136,6 +144,8 @@ export default function SalariesPage() {
       load();
     } catch (err: unknown) {
       toast({ title: "خطأ", description: err instanceof Error ? err.message : "حدث خطأ", variant: "destructive" });
+    } finally {
+      setSubmittingSalary(false);
     }
   }
 
@@ -216,17 +226,26 @@ export default function SalariesPage() {
                   <Plus className="w-4 h-4 ml-1" /> صرف راتب
                 </Button>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>الموظف</TableHead>
                       <TableHead>الفرع</TableHead>
                       <TableHead>الشهر / السنة</TableHead>
-                      <TableHead className="text-center">الأساسي</TableHead>
-                      <TableHead className="text-center">الاستحقاق</TableHead>
-                      <TableHead className="text-center">الاستقطاع</TableHead>
-                      <TableHead className="text-center">الصافي</TableHead>
+                      <TableHead className="text-center bg-green-50">الأساسي</TableHead>
+                      <TableHead className="text-center bg-green-50">علاوة 1</TableHead>
+                      <TableHead className="text-center bg-green-50">علاوة 2</TableHead>
+                      <TableHead className="text-center bg-green-50">ب. نقل</TableHead>
+                      <TableHead className="text-center bg-green-50">حافز</TableHead>
+                      <TableHead className="text-center bg-green-100 font-bold">الاستحقاق</TableHead>
+                      <TableHead className="text-center bg-red-50">سلفية</TableHead>
+                      <TableHead className="text-center bg-red-50">إجازة</TableHead>
+                      <TableHead className="text-center bg-red-50">جزاءات</TableHead>
+                      <TableHead className="text-center bg-red-50">اشتراكات</TableHead>
+                      <TableHead className="text-center bg-red-50">أخرى</TableHead>
+                      <TableHead className="text-center bg-red-100 font-bold">الاستقطاع</TableHead>
+                      <TableHead className="text-center font-bold">الصافي</TableHead>
                       <TableHead>تاريخ الصرف</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -249,15 +268,24 @@ export default function SalariesPage() {
                           <TableCell className="font-medium">{sp.employee?.fullName}</TableCell>
                           <TableCell>{sp.employee?.branch?.name}</TableCell>
                           <TableCell>{ARABIC_MONTHS[sp.month - 1]} {sp.year}</TableCell>
-                          <TableCell className="text-center">{formatCurrency(Number(sp.baseSalary))}</TableCell>
-                          <TableCell className="text-center text-green-700">{formatCurrency(earnings)}</TableCell>
-                          <TableCell className="text-center text-red-600">{deductions > 0 ? formatCurrency(deductions) : "—"}</TableCell>
+                          <TableCell className="text-center bg-green-50 text-sm">{formatCurrency(Number(sp.baseSalary))}</TableCell>
+                          <TableCell className="text-center bg-green-50 text-sm">{Number(sp.allowance1) > 0 ? formatCurrency(Number(sp.allowance1)) : "—"}</TableCell>
+                          <TableCell className="text-center bg-green-50 text-sm">{Number(sp.allowance2) > 0 ? formatCurrency(Number(sp.allowance2)) : "—"}</TableCell>
+                          <TableCell className="text-center bg-green-50 text-sm">{Number(sp.transportAllowance) > 0 ? formatCurrency(Number(sp.transportAllowance)) : "—"}</TableCell>
+                          <TableCell className="text-center bg-green-50 text-sm">{Number(sp.bonus) > 0 ? formatCurrency(Number(sp.bonus)) : "—"}</TableCell>
+                          <TableCell className="text-center bg-green-100 font-semibold text-green-700">{formatCurrency(earnings)}</TableCell>
+                          <TableCell className="text-center bg-red-50 text-sm">{Number(sp.loan) > 0 ? formatCurrency(Number(sp.loan)) : "—"}</TableCell>
+                          <TableCell className="text-center bg-red-50 text-sm">{Number(sp.leaveDeduction) > 0 ? formatCurrency(Number(sp.leaveDeduction)) : "—"}</TableCell>
+                          <TableCell className="text-center bg-red-50 text-sm">{Number(sp.penalty) > 0 ? formatCurrency(Number(sp.penalty)) : "—"}</TableCell>
+                          <TableCell className="text-center bg-red-50 text-sm">{Number(sp.subscription) > 0 ? formatCurrency(Number(sp.subscription)) : "—"}</TableCell>
+                          <TableCell className="text-center bg-red-50 text-sm">{Number(sp.otherDeduction) > 0 ? formatCurrency(Number(sp.otherDeduction)) : "—"}</TableCell>
+                          <TableCell className="text-center bg-red-100 font-semibold text-red-700">{deductions > 0 ? formatCurrency(deductions) : "—"}</TableCell>
                           <TableCell className="text-center font-bold text-blue-700">{formatCurrency(Number(sp.amount))}</TableCell>
                           <TableCell>{formatDate(sp.paidDate)}</TableCell>
                         </TableRow>
                       );
                     })}
-                    {salaryPayments.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-8 text-gray-500">لا توجد مدفوعات</TableCell></TableRow>}
+                    {salaryPayments.length === 0 && <TableRow><TableCell colSpan={17} className="text-center py-8 text-gray-500">لا توجد مدفوعات</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -417,13 +445,43 @@ export default function SalariesPage() {
 
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setSalaryDialog(false)}>إلغاء</Button>
-              <Button onClick={handleCreateSalaryPayment} disabled={!salaryForm.employeeId || !salaryForm.baseSalary || !salaryForm.month}>
-                صرف الراتب
+              <Button
+                onClick={() => {
+                  if (!salaryForm.employeeId || !salaryForm.baseSalary || !salaryForm.month) {
+                    toast({ title: "خطأ", description: "الموظف والراتب الأساسي والشهر مطلوبة", variant: "destructive" });
+                    return;
+                  }
+                  setSalaryConfirmOpen(true);
+                }}
+                disabled={submittingSalary || !salaryForm.employeeId || !salaryForm.baseSalary || !salaryForm.month}
+              >
+                {submittingSalary ? "جارٍ الصرف..." : "صرف الراتب"}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={salaryConfirmOpen} onOpenChange={setSalaryConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد صرف الراتب</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const emp = employees.find((e) => e.id === salaryForm.employeeId);
+                const { net } = calcNet(salaryForm);
+                return `هل تريد صرف راتب ${emp?.fullName ?? ""} لشهر ${ARABIC_MONTHS[Number(salaryForm.month) - 1] ?? ""} ${salaryForm.year}؟ الصافي: ${formatCurrency(net)}`;
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCreateSalaryPayment} disabled={submittingSalary}>
+              {submittingSalary ? "جارٍ..." : "تأكيد"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

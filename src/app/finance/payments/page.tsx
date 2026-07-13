@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Trash2, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const methodColors: Record<string, string> = { CASH: "default", BANK_TRANSFER: "secondary", CHECK: "outline" };
 
@@ -45,6 +46,7 @@ export default function PaymentsPage() {
   const [dialog, setDialog] = useState(false);
   const [form, setForm] = useState<PaymentForm>(emptyForm());
   const [submitting, setSubmitting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Student search state
   const [studentSearch, setStudentSearch] = useState("");
@@ -347,7 +349,13 @@ export default function PaymentsPage() {
 
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setDialog(false)}>إلغاء</Button>
-              <Button onClick={handleSubmit} disabled={submitting}>
+              <Button onClick={() => {
+                if (!form.studentId || !form.amount) {
+                  toast({ title: "خطأ", description: "الطالب والمبلغ مطلوبان", variant: "destructive" });
+                  return;
+                }
+                setConfirmOpen(true);
+              }} disabled={submitting}>
                 {submitting ? <RefreshCw className="w-4 h-4 animate-spin ml-1" /> : null}
                 حفظ
               </Button>
@@ -355,6 +363,23 @@ export default function PaymentsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد تسجيل الدفعة</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل تريد تسجيل دفعة بمبلغ {form.amount} للطالب {selectedStudent?.fullName}؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSubmit} disabled={submitting}>
+              {submitting ? "جارٍ..." : "تأكيد"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

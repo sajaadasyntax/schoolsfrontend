@@ -298,9 +298,26 @@ export const api = {
     const qs = params ? "?" + new URLSearchParams(params).toString() : "";
     return request<ExpenseRegisterReport>(`/api/reports/expenses-register${qs}`);
   },
+
+  // Academic years
+  getAcademicYears: () => request<AcademicYear[]>("/api/academic-years"),
+  createAcademicYear: (data: { name: string; copyFromYear?: string }) =>
+    request<AcademicYear>("/api/academic-years", { method: "POST", body: JSON.stringify(data) }),
+  closeAcademicYear: (id: string) =>
+    request<AcademicYear>(`/api/academic-years/${id}/close`, { method: "POST" }),
+  reopenAcademicYear: (id: string) =>
+    request<AcademicYear>(`/api/academic-years/${id}/reopen`, { method: "POST" }),
 };
 
 // --- Types ---
+export interface AcademicYear {
+  id: string;
+  name: string;
+  status: "OPEN" | "CLOSED";
+  closedAt: string | null;
+  createdAt: string;
+}
+
 export interface UserProfile {
   id: string;
   name: string;

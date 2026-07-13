@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,11 @@ function N(v: number | undefined) {
   return formatNumber(v ?? 0);
 }
 
+function collectionPct(paid: number, due: number): string {
+  if (!due) return "0%";
+  return `${Math.round((paid / due) * 100)}%`;
+}
+
 function exportCSV(filename: string, headers: string[], rows: (string | number)[][]) {
   const lines = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
   const blob = new Blob(["\ufeff" + lines], { type: "text/csv;charset=utf-8;" });
@@ -47,6 +53,8 @@ function exportCSV(filename: string, headers: string[], rows: (string | number)[
   a.click();
   URL.revokeObjectURL(url);
 }
+
+type MetricFilter = "ALL" | "INCOME" | "PAID" | "OUTSTANDING";
 
 export default function ReportsPage() {
   const { toast } = useToast();
@@ -59,6 +67,7 @@ export default function ReportsPage() {
     month: String(new Date().getMonth() + 1),
     year: String(new Date().getFullYear()),
   });
+  const [metricFilter, setMetricFilter] = useState<MetricFilter>("ALL");
 
   const [classFees, setClassFees] = useState<ClassFeesReport | null>(null);
   const [studentFees, setStudentFees] = useState<StudentFeesReport | null>(null);
@@ -113,10 +122,7 @@ export default function ReportsPage() {
   async function loadSalaryReg() {
     setLoad("salaryReg", true);
     try {
-      const params: Record<string, string> = {
-        month: filters.month,
-        year: filters.year,
-      };
+      const params: Record<string, string> = { month: filters.month, year: filters.year };
       if (filters.branchId !== "ALL") params.branchId = filters.branchId;
       setSalaryReg(await api.getSalaryRegisterReport(params));
     } catch {
@@ -142,19 +148,20 @@ export default function ReportsPage() {
 
   function exportClassFees() {
     if (!classFees) return;
-    const headers = ["الفصل", "الفرع", "الطلاب", ...BUCKET_LABELS.map((b) => b.label + " (مستحق)"), ...BUCKET_LABELS.map((b) => b.label + " (محصل)"), "الإجمالي المستحق", "الإجمالي المحصل", "المتبقي"];
+    const headers = ["الفصل", "الفرع", "عدد الطلاب", "المستحق", ...BUCKET_LABELS.map((b) => b.label + " (محصل)"), "إجمالي المدفوع", "المتبقي", "نسبة التحصيل"];
     const rows = classFees.rows.map((r) => [
       r.className, r.branchName, r.studentCount,
-      ...BUCKET_LABELS.map((b) => r.buckets[b.key as keyof typeof r.buckets]?.due ?? 0),
+      r.totalDue,
       ...BUCKET_LABELS.map((b) => r.buckets[b.key as keyof typeof r.buckets]?.paid ?? 0),
-      r.totalDue, r.totalPaid, r.remaining,
+      r.totalPaid, r.remaining,
+      collectionPct(r.totalPaid, r.totalDue),
     ]);
     exportCSV(`class-fees-${filters.academicYear}.csv`, headers, rows);
   }
 
   function exportStudentFees() {
     if (!studentFees) return;
-    const headers = ["م", "الاسم", "الفصل", "الفرع", ...BUCKET_LABELS.map((b) => b.label), "الإجمالي", "المحصل", "المتبقي", "ملاحظات"];
+    const headers = ["م", "الاسم", "الفصل", "الفرع", ...BUCKET_LABELS.map((b) => b.label), "المستحق", "المدفوع", "المتبقي", "ملاحظات"];
     const rows = studentFees.rows.map((r) => [
       r.index, r.fullName, r.className, r.branchName,
       ...BUCKET_LABELS.map((b) => r.buckets[b.key]?.paid ?? 0),
@@ -188,17 +195,46 @@ export default function ReportsPage() {
     exportCSV(`expenses-${filters.year}.csv`, headers, rows);
   }
 
+  // Helper: column visibility based on metric filter
+  const showIncome = metricFilter === "ALL" || metricFilter === "INCOME";
+  const showPaid = metricFilter === "ALL" || metricFilter === "PAID";
+  const showOutstanding = metricFilter === "ALL" || metricFilter === "OUTSTANDING";
+
   const commonFilters = (
-    <div className="flex flex-wrap gap-4 items-end mb-4">
+    <div className="space-y-3 mb-4">
+      <div className="flex flex-wrap gap-4 items-end">
+        <div>
+          <Label>الفرع</Label>
+          <Select value={filters.branchId} onValueChange={(v) => setFilters({ ...filters, branchId: v })}>
+            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">جميع الفروع</SelectItem>
+              {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      {/* Metric filter radios */}
       <div>
-        <Label>الفرع</Label>
-        <Select value={filters.branchId} onValueChange={(v) => setFilters({ ...filters, branchId: v })}>
-          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">جميع الفروع</SelectItem>
-            {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <p className="text-sm font-medium text-muted-foreground mb-1">عرض</p>
+        <RadioGroup
+          value={metricFilter}
+          onValueChange={(v) => setMetricFilter(v as MetricFilter)}
+          className="flex flex-wrap gap-x-6 gap-y-2"
+          dir="rtl"
+        >
+          {[
+            { value: "ALL", label: "الكل" },
+            { value: "INCOME", label: "الإيرادات" },
+            { value: "PAID", label: "المدفوع" },
+            { value: "OUTSTANDING", label: "المتبقي" },
+          ].map((opt) => (
+            <div key={opt.value} className="flex items-center gap-2">
+              <RadioGroupItem value={opt.value} id={`metric-${opt.value}`} />
+              <Label htmlFor={`metric-${opt.value}`} className="cursor-pointer font-normal">{opt.label}</Label>
+            </div>
+          ))}
+        </RadioGroup>
       </div>
     </div>
   );
@@ -216,7 +252,7 @@ export default function ReportsPage() {
             <TabsTrigger value="expenses-register">كشف المصروفات</TabsTrigger>
           </TabsList>
 
-          {/* ── Tab 1: Class Fees (تقرير.xlsx layout) ── */}
+          {/* ── Tab 1: Class Fees ── */}
           <TabsContent value="class-fees" className="space-y-4">
             <Card>
               <CardContent className="pt-4">
@@ -249,29 +285,43 @@ export default function ReportsPage() {
             {classFees && (
               <Card>
                 <CardHeader>
-                  <CardTitle>
-                    تقرير الفصول — السنة الدراسية {filters.academicYear}
-                    {filters.branchId !== "ALL" && ` — ${branches.find((b) => b.id === filters.branchId)?.name}`}
-                  </CardTitle>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle>
+                      تقرير الفصول — السنة الدراسية {filters.academicYear}
+                      {filters.branchId !== "ALL" && ` — ${branches.find((b) => b.id === filters.branchId)?.name}`}
+                    </CardTitle>
+                    <div className="flex gap-3 text-sm">
+                      <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded font-medium">
+                        {classFees.rows.reduce((s, r) => s + (r.studentCount ?? 0), 0)} طالب
+                      </span>
+                      <span className="bg-green-50 text-green-700 px-3 py-1 rounded font-medium">
+                        مجموع الترحيل: {collectionPct(classFees.totals.totalPaid ?? 0, classFees.totals.totalDue)}
+                      </span>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0 overflow-x-auto print:overflow-visible">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>الصف</TableHead>
-                        <TableHead>المبلغ المستحق</TableHead>
-                        {BUCKET_LABELS.map((b) => (
+                        <TableHead className="text-center">عدد الطلاب</TableHead>
+                        {showIncome && <TableHead className="text-center">المستحق</TableHead>}
+                        {showPaid && BUCKET_LABELS.map((b) => (
                           <TableHead key={b.key} className="text-center">{b.label}</TableHead>
                         ))}
-                        <TableHead className="text-center">المتبقي</TableHead>
+                        {showPaid && <TableHead className="text-center bg-green-50">إجمالي المدفوع</TableHead>}
+                        {showOutstanding && <TableHead className="text-center">المتبقي</TableHead>}
+                        <TableHead className="text-center">نسبة التحصيل</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {classFees.rows.map((row) => (
                         <TableRow key={row.classId}>
                           <TableCell className="font-medium">{row.className}</TableCell>
-                          <TableCell className="font-semibold">{N(row.totalDue)}</TableCell>
-                          {BUCKET_LABELS.map((b) => {
+                          <TableCell className="text-center text-blue-700 font-medium">{row.studentCount ?? 0}</TableCell>
+                          {showIncome && <TableCell className="text-center font-semibold">{N(row.totalDue)}</TableCell>}
+                          {showPaid && BUCKET_LABELS.map((b) => {
                             const bucket = row.buckets[b.key as keyof typeof row.buckets];
                             return (
                               <TableCell key={b.key} className="text-center text-sm">
@@ -283,20 +333,43 @@ export default function ReportsPage() {
                               </TableCell>
                             );
                           })}
-                          <TableCell className="text-center font-semibold text-red-600">{N(row.remaining)}</TableCell>
+                          {showPaid && (
+                            <TableCell className="text-center bg-green-50 font-semibold text-green-700">
+                              {N(row.totalPaid)}
+                            </TableCell>
+                          )}
+                          {showOutstanding && (
+                            <TableCell className="text-center font-semibold text-red-600">{N(row.remaining)}</TableCell>
+                          )}
+                          <TableCell className="text-center text-sm font-medium text-indigo-700">
+                            {collectionPct(row.totalPaid, row.totalDue)}
+                          </TableCell>
                         </TableRow>
                       ))}
                       {/* Grand Total */}
                       <TableRow className="bg-gray-100 font-bold">
                         <TableCell>الإجمالي</TableCell>
-                        <TableCell>{N(classFees.totals.totalDue)}</TableCell>
-                        {BUCKET_LABELS.map((b) => {
+                        <TableCell className="text-center text-blue-700">
+                          {classFees.rows.reduce((s, r) => s + (r.studentCount ?? 0), 0)}
+                        </TableCell>
+                        {showIncome && <TableCell className="text-center">{N(classFees.totals.totalDue)}</TableCell>}
+                        {showPaid && BUCKET_LABELS.map((b) => {
                           const bucket = classFees.totals.buckets[b.key as keyof typeof classFees.totals.buckets];
                           return (
                             <TableCell key={b.key} className="text-center text-green-700">{N(bucket.paid)}</TableCell>
                           );
                         })}
-                        <TableCell className="text-center text-red-700">{N(classFees.totals.remaining)}</TableCell>
+                        {showPaid && (
+                          <TableCell className="text-center bg-green-100 text-green-800">
+                            {N(classFees.totals.totalPaid ?? 0)}
+                          </TableCell>
+                        )}
+                        {showOutstanding && (
+                          <TableCell className="text-center text-red-700">{N(classFees.totals.remaining)}</TableCell>
+                        )}
+                        <TableCell className="text-center text-indigo-700">
+                          {collectionPct(classFees.totals.totalPaid ?? 0, classFees.totals.totalDue)}
+                        </TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
@@ -305,7 +378,7 @@ export default function ReportsPage() {
             )}
           </TabsContent>
 
-          {/* ── Tab 2: Student Fees (كل الطلاب-1.xlsx layout) ── */}
+          {/* ── Tab 2: Student Fees ── */}
           <TabsContent value="student-fees" className="space-y-4">
             <Card>
               <CardContent className="pt-4">
@@ -348,10 +421,15 @@ export default function ReportsPage() {
             {studentFees && (
               <Card>
                 <CardHeader>
-                  <CardTitle>
-                    جميع الطلاب — السنة الدراسية {filters.academicYear}
-                    {" "}({studentFees.rows.length} طالب)
-                  </CardTitle>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle>
+                      جميع الطلاب — السنة الدراسية {filters.academicYear}
+                      {" "}({studentFees.rows.length} طالب)
+                    </CardTitle>
+                    <span className="bg-green-50 text-green-700 px-3 py-1 rounded font-medium text-sm">
+                      مجموع الترحيل: {collectionPct(studentFees.totals.totalPaid ?? 0, studentFees.totals.totalDue)}
+                    </span>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0 overflow-x-auto">
                   <Table>
@@ -360,11 +438,12 @@ export default function ReportsPage() {
                         <TableHead>م</TableHead>
                         <TableHead>الاسم</TableHead>
                         <TableHead>الصف</TableHead>
-                        <TableHead className="text-center">المستحق</TableHead>
-                        {BUCKET_LABELS.map((b) => (
+                        {showIncome && <TableHead className="text-center">المستحق</TableHead>}
+                        {showPaid && BUCKET_LABELS.map((b) => (
                           <TableHead key={b.key} className="text-center">{b.label}</TableHead>
                         ))}
-                        <TableHead className="text-center">المتبقي</TableHead>
+                        {showPaid && <TableHead className="text-center bg-green-50">إجمالي المدفوع</TableHead>}
+                        {showOutstanding && <TableHead className="text-center">المتبقي</TableHead>}
                         <TableHead>ملاحظات</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -374,8 +453,10 @@ export default function ReportsPage() {
                           <TableCell className="text-gray-500 text-sm">{row.index}</TableCell>
                           <TableCell className="font-medium">{row.fullName}</TableCell>
                           <TableCell className="text-sm">{row.className}</TableCell>
-                          <TableCell className="text-center font-semibold">{N(row.totalDue)}</TableCell>
-                          {BUCKET_LABELS.map((b) => {
+                          {showIncome && (
+                            <TableCell className="text-center font-semibold">{N(row.totalDue)}</TableCell>
+                          )}
+                          {showPaid && BUCKET_LABELS.map((b) => {
                             const bucket = row.buckets[b.key];
                             return (
                               <TableCell key={b.key} className="text-center text-sm">
@@ -387,7 +468,14 @@ export default function ReportsPage() {
                               </TableCell>
                             );
                           })}
-                          <TableCell className="text-center font-semibold text-red-600">{N(row.remaining)}</TableCell>
+                          {showPaid && (
+                            <TableCell className="text-center bg-green-50 font-semibold text-green-700">
+                              {N(row.totalPaid)}
+                            </TableCell>
+                          )}
+                          {showOutstanding && (
+                            <TableCell className="text-center font-semibold text-red-600">{N(row.remaining)}</TableCell>
+                          )}
                           <TableCell>
                             {row.isOrphan && <Badge variant="outline" className="text-amber-700 border-amber-400">ايتام</Badge>}
                             {row.notes && !row.isOrphan && <span className="text-xs text-gray-500">{row.notes}</span>}
@@ -398,8 +486,10 @@ export default function ReportsPage() {
                       <TableRow className="bg-gray-100 font-bold">
                         <TableCell colSpan={2}>الجملة</TableCell>
                         <TableCell />
-                        <TableCell className="text-center">{N(studentFees.totals.totalDue)}</TableCell>
-                        {BUCKET_LABELS.map((b) => {
+                        {showIncome && (
+                          <TableCell className="text-center">{N(studentFees.totals.totalDue)}</TableCell>
+                        )}
+                        {showPaid && BUCKET_LABELS.map((b) => {
                           const bucket = studentFees.totals.buckets[b.key];
                           return (
                             <TableCell key={b.key} className="text-center text-green-700">
@@ -407,7 +497,14 @@ export default function ReportsPage() {
                             </TableCell>
                           );
                         })}
-                        <TableCell className="text-center text-red-700">{N(studentFees.totals.remaining)}</TableCell>
+                        {showPaid && (
+                          <TableCell className="text-center bg-green-100 text-green-800">
+                            {N(studentFees.totals.totalPaid ?? 0)}
+                          </TableCell>
+                        )}
+                        {showOutstanding && (
+                          <TableCell className="text-center text-red-700">{N(studentFees.totals.remaining)}</TableCell>
+                        )}
                         <TableCell />
                       </TableRow>
                     </TableBody>
@@ -417,12 +514,21 @@ export default function ReportsPage() {
             )}
           </TabsContent>
 
-          {/* ── Tab 3: Salary Register (مرتبات مارس.xlsx layout) ── */}
+          {/* ── Tab 3: Salary Register ── */}
           <TabsContent value="salary-register" className="space-y-4">
             <Card>
               <CardContent className="pt-4">
-                {commonFilters}
-                <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex flex-wrap gap-4 items-end mb-4">
+                  <div>
+                    <Label>الفرع</Label>
+                    <Select value={filters.branchId} onValueChange={(v) => setFilters({ ...filters, branchId: v })}>
+                      <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">جميع الفروع</SelectItem>
+                        {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div>
                     <Label>الشهر</Label>
                     <Select value={filters.month} onValueChange={(v) => setFilters({ ...filters, month: v })}>
@@ -461,7 +567,6 @@ export default function ReportsPage() {
 
             {salaryReg && (
               <div className="space-y-6">
-                {/* Teaching Section */}
                 {salaryReg.teaching.length > 0 && (
                   <SalarySection
                     title={`المعلمون (${salaryReg.teaching.length})`}
@@ -469,7 +574,6 @@ export default function ReportsPage() {
                     totals={salaryReg.teachingTotals}
                   />
                 )}
-                {/* Staff Section */}
                 {salaryReg.staff.length > 0 && (
                   <SalarySection
                     title={`الموظفون (${salaryReg.staff.length})`}
@@ -477,7 +581,6 @@ export default function ReportsPage() {
                     totals={salaryReg.staffTotals}
                   />
                 )}
-                {/* Grand Total */}
                 <Card>
                   <CardContent className="pt-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
@@ -504,12 +607,21 @@ export default function ReportsPage() {
             )}
           </TabsContent>
 
-          {/* ── Tab 4: Expenses Register (مصروفات.xlsx layout) ── */}
+          {/* ── Tab 4: Expenses Register ── */}
           <TabsContent value="expenses-register" className="space-y-4">
             <Card>
               <CardContent className="pt-4">
-                {commonFilters}
-                <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex flex-wrap gap-4 items-end mb-4">
+                  <div>
+                    <Label>الفرع</Label>
+                    <Select value={filters.branchId} onValueChange={(v) => setFilters({ ...filters, branchId: v })}>
+                      <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">جميع الفروع</SelectItem>
+                        {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div>
                     <Label>السنة</Label>
                     <Input
@@ -647,7 +759,6 @@ function SalarySection({
                 <TableCell className="text-center bg-red-100 font-bold text-blue-700">{N(row.netSalary)}</TableCell>
               </TableRow>
             ))}
-            {/* Totals Row */}
             <TableRow className="bg-gray-100 font-bold text-sm">
               <TableCell colSpan={3}>الجملة</TableCell>
               <TableCell className="text-center bg-green-100">{N(totals.baseSalary)}</TableCell>
