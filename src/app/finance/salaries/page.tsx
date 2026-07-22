@@ -81,9 +81,26 @@ export default function SalariesPage() {
   const [submittingSalary, setSubmittingSalary] = useState(false);
   const [salaryConfirmOpen, setSalaryConfirmOpen] = useState(false);
 
+  const [filterBranch, setFilterBranch] = useState("ALL");
+  const [filterMonth, setFilterMonth] = useState("ALL");
+  const [filterYear, setFilterYear] = useState(String(new Date().getFullYear()));
+
   async function load() {
+    setLoading(true);
     try {
-      const [e, s, b] = await Promise.all([api.getEmployees(), api.getSalaryPayments(), api.getBranches()]);
+      const empParams: Record<string, string> = {};
+      if (filterBranch !== "ALL") empParams.branchId = filterBranch;
+
+      const payParams: Record<string, string> = {};
+      if (filterBranch !== "ALL") payParams.branchId = filterBranch;
+      if (filterMonth !== "ALL") payParams.month = filterMonth;
+      if (filterYear) payParams.year = filterYear;
+
+      const [e, s, b] = await Promise.all([
+        api.getEmployees(empParams),
+        api.getSalaryPayments(payParams),
+        api.getBranches(),
+      ]);
       setEmployees(e);
       setSalaryPayments(s);
       setBranches(b);
@@ -94,7 +111,22 @@ export default function SalariesPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [filterBranch, filterMonth, filterYear]);
+
+  const salaryStats = {
+    count: salaryPayments.length,
+    totalNet: salaryPayments.reduce((s, p) => s + Number(p.amount), 0),
+    totalDeductions: salaryPayments.reduce(
+      (s, p) =>
+        s +
+        Number(p.loan) +
+        Number(p.leaveDeduction) +
+        Number(p.penalty) +
+        Number(p.subscription) +
+        Number(p.otherDeduction),
+      0
+    ),
+  };
 
   async function handleCreateEmployee() {
     try {
@@ -170,6 +202,61 @@ export default function SalariesPage() {
       <div className="space-y-4">
         <h1 className="text-2xl font-bold">إدارة الرواتب</h1>
 
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex flex-wrap gap-4 items-end">
+              <div>
+                <Label>الفرع</Label>
+                <Select value={filterBranch} onValueChange={setFilterBranch}>
+                  <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">جميع الفروع</SelectItem>
+                    {branches.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>شهر الرواتب</Label>
+                <Select value={filterMonth} onValueChange={setFilterMonth}>
+                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">كل الأشهر</SelectItem>
+                    {ARABIC_MONTHS.map((m, i) => (
+                      <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>السنة</Label>
+                <Input
+                  type="number"
+                  className="w-28"
+                  value={filterYear}
+                  onChange={(e) => setFilterYear(e.target.value)}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="bg-blue-50 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-blue-700">{salaryStats.count}</div>
+            <div className="text-xs text-blue-600">عدد الصرفيات</div>
+          </div>
+          <div className="bg-green-50 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-green-700">{formatCurrency(salaryStats.totalNet)}</div>
+            <div className="text-xs text-green-600">إجمالي الصافي</div>
+          </div>
+          <div className="bg-red-50 rounded-lg p-3 text-center">
+            <div className="text-lg font-bold text-red-700">{formatCurrency(salaryStats.totalDeductions)}</div>
+            <div className="text-xs text-red-600">إجمالي الاستقطاعات</div>
+          </div>
+        </div>
+
         <Tabs defaultValue="employees">
           <TabsList>
             <TabsTrigger value="employees">الموظفون ({employees.length})</TabsTrigger>
@@ -192,14 +279,18 @@ export default function SalariesPage() {
                       <TableHead>المسمى الوظيفي</TableHead>
                       <TableHead>الفئة</TableHead>
                       <TableHead>الفرع</TableHead>
+                      <TableHead>الهاتف</TableHead>
+                      <TableHead>تاريخ التعيين</TableHead>
                       <TableHead>الراتب الأساسي</TableHead>
                       <TableHead>الحالة</TableHead>
                       <TableHead>حذف</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {loading ? <TableRow><TableCell colSpan={7} className="text-center py-8">جارٍ التحميل...</TableCell></TableRow>
-                      : employees.map((emp) => (
+                    {loading ? <TableRow><TableCell colSpan={9} className="text-center py-8">جارٍ التحميل...</TableCell></TableRow>
+                      : employees.length === 0 ? (
+                        <TableRow><TableCell colSpan={9} className="text-center py-8 text-gray-500">لا يوجد موظفون</TableCell></TableRow>
+                      ) : employees.map((emp) => (
                         <TableRow key={emp.id}>
                           <TableCell className="font-medium">{emp.fullName}</TableCell>
                           <TableCell>{emp.jobTitle || "-"}</TableCell>
@@ -207,6 +298,8 @@ export default function SalariesPage() {
                             <Badge variant="outline">{getEmployeeCategoryLabel(emp.category)}</Badge>
                           </TableCell>
                           <TableCell>{emp.branch?.name}</TableCell>
+                          <TableCell>{emp.phone || "-"}</TableCell>
+                          <TableCell>{emp.hireDate ? formatDate(emp.hireDate) : "-"}</TableCell>
                           <TableCell className="font-medium">{formatCurrency(Number(emp.baseSalary))}</TableCell>
                           <TableCell><Badge variant={emp.status === "ACTIVE" ? "default" : "secondary"}>{emp.status === "ACTIVE" ? "نشط" : "غير نشط"}</Badge></TableCell>
                           <TableCell><Button variant="ghost" size="sm" onClick={() => handleDeleteEmployee(emp.id)}><Trash2 className="w-4 h-4 text-red-500" /></Button></TableCell>
@@ -247,10 +340,14 @@ export default function SalariesPage() {
                       <TableHead className="text-center bg-red-100 font-bold">الاستقطاع</TableHead>
                       <TableHead className="text-center font-bold">الصافي</TableHead>
                       <TableHead>تاريخ الصرف</TableHead>
+                      <TableHead>التوقيع</TableHead>
+                      <TableHead>ملاحظات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {salaryPayments.map((sp) => {
+                    {loading ? (
+                      <TableRow><TableCell colSpan={19} className="text-center py-8">جارٍ التحميل...</TableCell></TableRow>
+                    ) : salaryPayments.map((sp) => {
                       const earnings =
                         Number(sp.baseSalary) +
                         Number(sp.allowance1) +
@@ -282,10 +379,12 @@ export default function SalariesPage() {
                           <TableCell className="text-center bg-red-100 font-semibold text-red-700">{deductions > 0 ? formatCurrency(deductions) : "—"}</TableCell>
                           <TableCell className="text-center font-bold text-blue-700">{formatCurrency(Number(sp.amount))}</TableCell>
                           <TableCell>{formatDate(sp.paidDate)}</TableCell>
+                          <TableCell>{sp.signedAt ? formatDate(sp.signedAt) : "—"}</TableCell>
+                          <TableCell className="max-w-[120px] truncate text-sm">{sp.notes || "—"}</TableCell>
                         </TableRow>
                       );
                     })}
-                    {salaryPayments.length === 0 && <TableRow><TableCell colSpan={17} className="text-center py-8 text-gray-500">لا توجد مدفوعات</TableCell></TableRow>}
+                    {!loading && salaryPayments.length === 0 && <TableRow><TableCell colSpan={19} className="text-center py-8 text-gray-500">لا توجد مدفوعات</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               </CardContent>

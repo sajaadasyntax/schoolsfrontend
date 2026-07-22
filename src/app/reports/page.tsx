@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import {
   api,
+  AcademicYear,
   Branch,
   Class,
   ClassFeesReport,
@@ -60,12 +61,14 @@ export default function ReportsPage() {
   const { toast } = useToast();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
+  const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
   const [filters, setFilters] = useState({
     branchId: "ALL",
-    academicYear: "2024-2025",
+    academicYear: "",
     classId: "ALL",
     month: String(new Date().getMonth() + 1),
     year: String(new Date().getFullYear()),
+    expenseMonth: "ALL",
   });
   const [metricFilter, setMetricFilter] = useState<MetricFilter>("ALL");
 
@@ -74,19 +77,43 @@ export default function ReportsPage() {
   const [salaryReg, setSalaryReg] = useState<SalaryRegisterReport | null>(null);
   const [expenseReg, setExpenseReg] = useState<ExpenseRegisterReport | null>(null);
   const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [metaReady, setMetaReady] = useState(false);
 
   async function loadMeta() {
-    const bs = await api.getBranches();
+    const [bs, years] = await Promise.all([api.getBranches(), api.getAcademicYears()]);
     setBranches(bs);
+    setAcademicYears(years);
     const allClasses: Class[] = [];
     for (const b of bs) {
       const detail = await api.getBranch(b.id);
       allClasses.push(...detail.classes);
     }
     setClasses(allClasses);
+
+    const openYear = years.find((y) => y.status === "OPEN") || years[0];
+    const defaultYear = openYear?.name || "2024-2025";
+    setFilters((prev) => ({
+      ...prev,
+      academicYear: prev.academicYear || defaultYear,
+    }));
+    setMetaReady(true);
+    return defaultYear;
   }
 
-  useEffect(() => { loadMeta(); }, []);
+  useEffect(() => {
+    loadMeta().catch(() => {
+      toast({ title: "خطأ", description: "تعذر تحميل البيانات الأساسية", variant: "destructive" });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!metaReady || !filters.academicYear) return;
+    loadClassFees();
+    loadStudentFees();
+    loadSalaryReg();
+    loadExpenseReg();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metaReady, filters.academicYear]);
 
   function setLoad(key: string, v: boolean) {
     setLoading((prev) => ({ ...prev, [key]: v }));
@@ -137,7 +164,7 @@ export default function ReportsPage() {
     try {
       const params: Record<string, string> = { year: filters.year };
       if (filters.branchId !== "ALL") params.branchId = filters.branchId;
-      if (filters.month !== "ALL") params.month = filters.month;
+      if (filters.expenseMonth !== "ALL") params.month = filters.expenseMonth;
       setExpenseReg(await api.getExpensesRegisterReport(params));
     } catch {
       toast({ title: "خطأ", description: "تعذر تحميل كشف المصروفات", variant: "destructive" });
@@ -260,11 +287,25 @@ export default function ReportsPage() {
                 <div className="flex flex-wrap gap-4 items-end">
                   <div>
                     <Label>السنة الدراسية</Label>
-                    <Input
-                      value={filters.academicYear}
-                      onChange={(e) => setFilters({ ...filters, academicYear: e.target.value })}
-                      className="w-36"
-                    />
+                    {academicYears.length > 0 ? (
+                      <Select
+                        value={filters.academicYear}
+                        onValueChange={(v) => setFilters({ ...filters, academicYear: v })}
+                      >
+                        <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {academicYears.map((y) => (
+                            <SelectItem key={y.id} value={y.name}>{y.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={filters.academicYear}
+                        onChange={(e) => setFilters({ ...filters, academicYear: e.target.value })}
+                        className="w-36"
+                      />
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <Button onClick={loadClassFees} disabled={loading.classFees}>
@@ -305,6 +346,7 @@ export default function ReportsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>الصف</TableHead>
+                        <TableHead>الفرع</TableHead>
                         <TableHead className="text-center">عدد الطلاب</TableHead>
                         {showIncome && <TableHead className="text-center">المستحق</TableHead>}
                         {showPaid && BUCKET_LABELS.map((b) => (
@@ -319,6 +361,7 @@ export default function ReportsPage() {
                       {classFees.rows.map((row) => (
                         <TableRow key={row.classId}>
                           <TableCell className="font-medium">{row.className}</TableCell>
+                          <TableCell className="text-sm text-gray-600">{row.branchName}</TableCell>
                           <TableCell className="text-center text-blue-700 font-medium">{row.studentCount ?? 0}</TableCell>
                           {showIncome && <TableCell className="text-center font-semibold">{N(row.totalDue)}</TableCell>}
                           {showPaid && BUCKET_LABELS.map((b) => {
@@ -349,6 +392,7 @@ export default function ReportsPage() {
                       {/* Grand Total */}
                       <TableRow className="bg-gray-100 font-bold">
                         <TableCell>الإجمالي</TableCell>
+                        <TableCell />
                         <TableCell className="text-center text-blue-700">
                           {classFees.rows.reduce((s, r) => s + (r.studentCount ?? 0), 0)}
                         </TableCell>
@@ -396,11 +440,25 @@ export default function ReportsPage() {
                   </div>
                   <div>
                     <Label>السنة الدراسية</Label>
-                    <Input
-                      value={filters.academicYear}
-                      onChange={(e) => setFilters({ ...filters, academicYear: e.target.value })}
-                      className="w-36"
-                    />
+                    {academicYears.length > 0 ? (
+                      <Select
+                        value={filters.academicYear}
+                        onValueChange={(v) => setFilters({ ...filters, academicYear: v })}
+                      >
+                        <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {academicYears.map((y) => (
+                            <SelectItem key={y.id} value={y.name}>{y.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={filters.academicYear}
+                        onChange={(e) => setFilters({ ...filters, academicYear: e.target.value })}
+                        className="w-36"
+                      />
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <Button onClick={loadStudentFees} disabled={loading.studentFees}>
@@ -438,6 +496,7 @@ export default function ReportsPage() {
                         <TableHead>م</TableHead>
                         <TableHead>الاسم</TableHead>
                         <TableHead>الصف</TableHead>
+                        <TableHead>الفرع</TableHead>
                         {showIncome && <TableHead className="text-center">المستحق</TableHead>}
                         {showPaid && BUCKET_LABELS.map((b) => (
                           <TableHead key={b.key} className="text-center">{b.label}</TableHead>
@@ -453,6 +512,7 @@ export default function ReportsPage() {
                           <TableCell className="text-gray-500 text-sm">{row.index}</TableCell>
                           <TableCell className="font-medium">{row.fullName}</TableCell>
                           <TableCell className="text-sm">{row.className}</TableCell>
+                          <TableCell className="text-sm text-gray-600">{row.branchName}</TableCell>
                           {showIncome && (
                             <TableCell className="text-center font-semibold">{N(row.totalDue)}</TableCell>
                           )}
@@ -485,6 +545,7 @@ export default function ReportsPage() {
                       {/* Total Row */}
                       <TableRow className="bg-gray-100 font-bold">
                         <TableCell colSpan={2}>الجملة</TableCell>
+                        <TableCell />
                         <TableCell />
                         {showIncome && (
                           <TableCell className="text-center">{N(studentFees.totals.totalDue)}</TableCell>
@@ -623,6 +684,21 @@ export default function ReportsPage() {
                     </Select>
                   </div>
                   <div>
+                    <Label>الشهر</Label>
+                    <Select
+                      value={filters.expenseMonth}
+                      onValueChange={(v) => setFilters({ ...filters, expenseMonth: v })}
+                    >
+                      <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">كل الأشهر</SelectItem>
+                        {ARABIC_MONTHS.map((m, i) => (
+                          <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
                     <Label>السنة</Label>
                     <Input
                       type="number"
@@ -737,7 +813,11 @@ function SalarySection({
               <TableHead className="text-center bg-red-50">إجازة</TableHead>
               <TableHead className="text-center bg-red-50">جزاءات</TableHead>
               <TableHead className="text-center bg-red-50">اشتراكات</TableHead>
-              <TableHead className="text-center bg-red-100 font-bold">الصافي</TableHead>
+              <TableHead className="text-center bg-red-50">أخرى</TableHead>
+              <TableHead className="text-center bg-red-100 font-bold">جملة الاستقطاع</TableHead>
+              <TableHead className="text-center bg-blue-50 font-bold">الصافي</TableHead>
+              <TableHead>التوقيع</TableHead>
+              <TableHead>ملاحظات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -756,7 +836,13 @@ function SalarySection({
                 <TableCell className="text-center bg-red-50">{row.leaveDeduction > 0 ? N(row.leaveDeduction) : "—"}</TableCell>
                 <TableCell className="text-center bg-red-50">{row.penalty > 0 ? N(row.penalty) : "—"}</TableCell>
                 <TableCell className="text-center bg-red-50">{row.subscription > 0 ? N(row.subscription) : "—"}</TableCell>
-                <TableCell className="text-center bg-red-100 font-bold text-blue-700">{N(row.netSalary)}</TableCell>
+                <TableCell className="text-center bg-red-50">{row.otherDeduction > 0 ? N(row.otherDeduction) : "—"}</TableCell>
+                <TableCell className="text-center bg-red-100 font-semibold text-red-700">{N(row.totalDeductions)}</TableCell>
+                <TableCell className="text-center bg-blue-50 font-bold text-blue-700">{N(row.netSalary)}</TableCell>
+                <TableCell className="text-sm">
+                  {row.signedAt ? new Date(row.signedAt).toLocaleDateString("ar-SA") : "—"}
+                </TableCell>
+                <TableCell className="text-sm max-w-[120px] truncate">{row.notes || "—"}</TableCell>
               </TableRow>
             ))}
             <TableRow className="bg-gray-100 font-bold text-sm">
@@ -771,7 +857,11 @@ function SalarySection({
               <TableCell className="text-center bg-red-100">{N(totals.leaveDeduction)}</TableCell>
               <TableCell className="text-center bg-red-100">{N(totals.penalty)}</TableCell>
               <TableCell className="text-center bg-red-100">{N(totals.subscription)}</TableCell>
-              <TableCell className="text-center bg-red-200 text-blue-800">{N(totals.netSalary)}</TableCell>
+              <TableCell className="text-center bg-red-100">{N(totals.otherDeduction)}</TableCell>
+              <TableCell className="text-center bg-red-200 text-red-800">{N(totals.totalDeductions)}</TableCell>
+              <TableCell className="text-center bg-blue-100 text-blue-800">{N(totals.netSalary)}</TableCell>
+              <TableCell />
+              <TableCell />
             </TableRow>
           </TableBody>
         </Table>

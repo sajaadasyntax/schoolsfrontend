@@ -59,43 +59,67 @@ function templateToRow(t: ClassFeeTemplate): RowState {
   };
 }
 
+function suggestNextYear(current: string): string {
+  const m = current.match(/^(\d{4})-(\d{4})$/);
+  if (!m) return "";
+  const start = Number(m[1]) + 1;
+  const end = Number(m[2]) + 1;
+  return `${start}-${end}`;
+}
+
+function pickDefaultYear(years: AcademicYear[]): string {
+  const open = years.find((y) => y.status === "OPEN");
+  if (open) return open.name;
+  return years[0]?.name || "2024-2025";
+}
+
 export default function FeeTemplatesPage() {
   const { toast } = useToast();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
-  const [academicYear, setAcademicYear] = useState("2024-2025");
+  const [academicYear, setAcademicYear] = useState("");
   const [selectedBranch, setSelectedBranch] = useState<string>("ALL");
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [loading, setLoading] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   // Year management dialog
   const [newYearDialog, setNewYearDialog] = useState(false);
   const [newYearName, setNewYearName] = useState("");
-  const [copyFrom, setCopyFrom] = useState<string>("");
+  const [copyFrom, setCopyFrom] = useState<string>("__none__");
   const [savingYear, setSavingYear] = useState(false);
   const [closingYear, setClosingYear] = useState(false);
 
-  async function loadData() {
+  async function loadData(yearName?: string) {
+    const year = yearName || academicYear;
+    if (!year) return;
     setLoading(true);
     try {
-      const [bs, templates, years] = await Promise.all([
-        api.getBranches(),
-        api.getFeeTemplates({ academicYear }),
-        api.getAcademicYears(),
-      ]);
-      setAcademicYears(years);
-      // If no years in DB yet, seed current year entry silently
+      let years = await api.getAcademicYears();
+      // If no years in DB yet, seed current year entry then re-fetch
       if (years.length === 0) {
-        try { await api.createAcademicYear({ name: academicYear }); } catch { /* ignore if exists */ }
+        try {
+          await api.createAcademicYear({ name: year });
+        } catch {
+          /* ignore if exists */
+        }
+        years = await api.getAcademicYears();
       }
+      setAcademicYears(years);
+
+      const [bs, templates] = await Promise.all([
+        api.getBranches(),
+        api.getFeeTemplates({ academicYear: year }),
+      ]);
       setBranches(bs);
 
-      // Collect all classes from branch details
       const allClasses: Class[] = [];
       for (const b of bs) {
         const detail = await api.getBranch(b.id);
-        allClasses.push(...detail.classes.map((c) => ({ ...c, branchId: b.id, branch: b } as unknown as Class)));
+        allClasses.push(
+          ...detail.classes.map((c) => ({ ...c, branchId: b.id, branch: b } as unknown as Class))
+        );
       }
       setClasses(allClasses);
 
@@ -112,7 +136,25 @@ export default function FeeTemplatesPage() {
     }
   }
 
-  useEffect(() => { loadData(); }, [academicYear]);
+  // Resolve default academic year once on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const years = await api.getAcademicYears();
+        const defaultYear = pickDefaultYear(years);
+        setAcademicYears(years);
+        setAcademicYear(defaultYear);
+        setInitialized(true);
+      } catch {
+        setAcademicYear("2024-2025");
+        setInitialized(true);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (initialized && academicYear) loadData(academicYear);
+  }, [academicYear, initialized]);
 
   const updateCell = useCallback((classId: string, key: BucketKey, value: string) => {
     setRows((prev) => ({
@@ -161,6 +203,12 @@ export default function FeeTemplatesPage() {
 
   const [applyConfirmClassId, setApplyConfirmClassId] = useState<string | null>(null);
 
+  function openNewYearDialog() {
+    setNewYearName(suggestNextYear(academicYear) || "");
+    setCopyFrom(academicYear || "__none__");
+    setNewYearDialog(true);
+  }
+
   async function handleCreateYear() {
     if (!newYearName.trim()) {
       toast({ title: "خطأ", description: "اسم السنة مطلوب", variant: "destructive" });
@@ -168,15 +216,20 @@ export default function FeeTemplatesPage() {
     }
     setSavingYear(true);
     try {
-      await api.createAcademicYear({ name: newYearName.trim(), copyFromYear: copyFrom || undefined });
+      const copyFromYear = copyFrom && copyFrom !== "__none__" ? copyFrom : undefined;
+      await api.createAcademicYear({ name: newYearName.trim(), copyFromYear });
       toast({ title: "تم إنشاء السنة الدراسية", description: newYearName.trim() });
       setNewYearDialog(false);
       setAcademicYear(newYearName.trim());
       setNewYearName("");
-      setCopyFrom("");
-      loadData();
+      setCopyFrom("__none__");
     } catch (err: unknown) {
-      toast({ title: "خطأ", description: err instanceof Error ? err.message : "حدث خطأ", variant: "destructive" });
+      const msg = err instanceof Error ? err.message : "حدث خطأ";
+      toast({
+        title: "خطأ",
+        description: msg.includes("موجودة") ? "هذه السنة الدراسية موجودة مسبقاً" : msg,
+        variant: "destructive",
+      });
     } finally {
       setSavingYear(false);
     }
@@ -192,7 +245,7 @@ export default function FeeTemplatesPage() {
     try {
       await api.closeAcademicYear(yearObj.id);
       toast({ title: "تم إغلاق السنة الدراسية", description: academicYear });
-      loadData();
+      loadData(academicYear);
     } catch (err: unknown) {
       toast({ title: "خطأ", description: err instanceof Error ? err.message : "حدث خطأ", variant: "destructive" });
     } finally {
@@ -220,7 +273,7 @@ export default function FeeTemplatesPage() {
               حدد مبالغ كل بند لكل فصل دراسي، ثم طبّقها على الطلاب.
             </p>
           </div>
-          <Button size="sm" onClick={() => { setNewYearName(""); setCopyFrom(""); setNewYearDialog(true); }}>
+          <Button size="sm" onClick={openNewYearDialog}>
             <Plus className="w-4 h-4 ml-1" /> سنة دراسية جديدة
           </Button>
         </div>
@@ -277,7 +330,7 @@ export default function FeeTemplatesPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button variant="outline" onClick={loadData} disabled={loading}>
+              <Button variant="outline" onClick={() => loadData()} disabled={loading}>
                 <RefreshCw className={`w-4 h-4 ml-1 ${loading ? "animate-spin" : ""}`} />
                 تحديث
               </Button>
@@ -417,7 +470,7 @@ export default function FeeTemplatesPage() {
               <Select value={copyFrom} onValueChange={setCopyFrom}>
                 <SelectTrigger><SelectValue placeholder="لا نسخ" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">لا نسخ</SelectItem>
+                  <SelectItem value="__none__">لا نسخ</SelectItem>
                   {academicYears.map((y) => (
                     <SelectItem key={y.id} value={y.name}>{y.name}</SelectItem>
                   ))}

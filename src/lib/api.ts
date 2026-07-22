@@ -105,8 +105,12 @@ export const api = {
     request<Student>(`/api/students/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteStudent: (id: string) =>
     request<{ message: string }>(`/api/students/${id}`, { method: "DELETE" }),
-  getStudentFinancialSummary: (id: string) =>
-    request<FinancialSummary>(`/api/students/${id}/financial-summary`),
+  getStudentFinancialSummary: (id: string, params?: { academicYear?: string }) => {
+    const qs = params?.academicYear
+      ? "?" + new URLSearchParams({ academicYear: params.academicYear }).toString()
+      : "";
+    return request<FinancialSummary>(`/api/students/${id}/financial-summary${qs}`);
+  },
 
   // Fees
   getFees: (params?: Record<string, string>) => {
@@ -559,6 +563,8 @@ export interface FinancialSummary {
   totalInstallments: number;
   paidInstallments: number;
   pendingInstallments: number;
+  paidByBucket?: Record<string, { due: number; paid: number; remaining: number }>;
+  academicYear?: string | null;
 }
 
 export interface DashboardStats {
